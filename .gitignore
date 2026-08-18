@@ -1,0 +1,43 @@
+# ============================================================================
+#  CRITICAL: Never commit API keys, secrets, or the key-pool database.
+#  The tool stores plaintext Tavily API keys in `tavily_keys.db` by design
+#  (for fast SQLite-backed round-robin with zero startup cost). If you ever
+#  accidentally `git add` it, the keys are still in your local git history —
+#  rotate every key in the pool immediately.
+# ============================================================================
+
+# --- Key pool database (PLAIN-TEXT API KEYS) ---
+# All three files are SQLite WAL-mode artifacts of the same database; the
+# `-shm` and `-wal` files can also contain recently-written key rows.
+tavily_keys.db
+tavily_keys.db-shm
+tavily_keys.db-wal
+*.keys.db
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+
+# --- Virtualenv (rebuilt by users with their own Python) ---
+.venv/
+venv/
+env/
+
+# --- Editor / OS ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Local environment / one-off migration scripts ---
+.env
+.env.local
+migration_test.py
+*.log

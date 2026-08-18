@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tavily API Key Pool Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{font:13px/1.5 system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;flex-direction:column}
+
+.header{background:#1e293b;padding:10px 20px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #334155;flex-shrink:0}
+.header h1{font-size:16px}
+.stats-bar{display:flex;gap:18px;font-size:12px;align-items:center}
+.stat-item{display:flex;align-items:center;gap:5px;color:#94a3b8}
+.stat-item span{color:#e2e8f0;font-weight:600}
+.refresh{font-size:11px;color:#64748b}
+.refresh strong{color:#94a3b8}
+
+.add-bar{background:#1e293b;border-bottom:1px solid #334155;flex-shrink:0}
+.add-bar-toggle{cursor:pointer;padding:8px 20px;display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8;user-select:none}
+.add-bar-toggle:hover{color:#e2e8f0}
+.add-bar-toggle .arrow{transition:transform .2s;display:inline-block}
+.add-bar-toggle.open .arrow{transform:rotate(90deg)}
+.add-bar-body{display:none;padding:0 20px 12px}
+.add-bar-body.open{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.add-bar-body textarea{background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:6px 10px;border-radius:4px;font-size:12px;font-family:inherit;min-width:260px;min-height:54px;resize:vertical}
+.add-bar-body label{font-size:11px;color:#94a3b8;display:block;margin-bottom:4px}
+
+.waterfall{flex:1;display:flex;gap:16px;padding:16px;min-height:0}
+.column{flex:1;display:flex;flex-direction:column;min-width:0}
+.column-header{background:#1e293b;padding:10px 16px;border-radius:8px 8px 0 0;border:1px solid #334155;border-bottom:none;font-weight:600;font-size:13px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.column-body{flex:1;background:#1e293b;border:1px solid #334155;border-top:none;border-radius:0 0 8px 8px;overflow-y:auto;overflow-x:auto;min-height:0}
+
+table{width:100%;border-collapse:collapse}
+th,td{padding:7px 10px;text-align:left;border-bottom:1px solid #334155;font-size:12px;white-space:nowrap}
+th{color:#94a3b8;font-weight:500;position:sticky;top:0;background:#1e293b;z-index:1}
+th::after{content:'';position:absolute;left:0;bottom:-1px;width:100%;border-bottom:1px solid #334155}
+tr:hover{background:#283348}
+
+.badge{font-size:10px;padding:2px 7px;border-radius:10px;font-weight:500}
+.badge-active{background:#065f46;color:#6ee7b7}
+.badge-inactive{background:#7f1d1d;color:#fca5a5}
+.badge-success{background:#065f46;color:#6ee7b7}
+.badge-fail{background:#7f1d1d;color:#fca5a5}
+
+.btn{padding:5px 12px;border-radius:5px;border:none;cursor:pointer;font-size:11px;font-weight:500;white-space:nowrap}
+.btn-primary{background:#3b82f6;color:#fff}
+.btn-danger{background:#ef4444;color:#fff}
+.btn-sm{padding:3px 8px;font-size:10px}
+
+.progress-bar{height:5px;border-radius:3px;background:#334155;overflow:hidden;width:70px}
+.progress-fill{height:100%;border-radius:3px;transition:width .3s}
+
+.actions{display:flex;gap:4px}
+.status{font-size:11px;color:#94a3b8;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.col-header-right{display:flex;gap:8px;align-items:center}
+
+.column-body::-webkit-scrollbar{width:6px;height:6px}
+.column-body::-webkit-scrollbar-track{background:transparent}
+.column-body::-webkit-scrollbar-thumb{background:#475569;border-radius:3px}
+.column-body::-webkit-scrollbar-thumb:hover{background:#64748b}
+
+tr td:last-child,tr th:last-child{padding-right:16px}
+tr td:first-child,tr th:first-child{padding-left:14px}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Tavily API Key Pool</h1>
+  <div class="stats-bar">
+    <div class="stat-item">Keys: <span id="totalKeys">-</span></div>
+    <div class="stat-item">Active: <span id="activeKeys">-</span></div>
+    <div class="stat-item">Requests: <span id="totalReqs">-</span></div>
+    <div class="stat-item">Credits Today: <span id="totalCredits">-</span></div>
+    <div class="refresh" id="refreshTime"></div>
+  </div>
+</div>
+
+<div class="add-bar">
+  <div class="add-bar-toggle" id="addToggle" onclick="toggleAdd()">
+    <span class="arrow">▶</span> Add API Keys
+  </div>
+  <div class="add-bar-body" id="addBody">
+    <div>
+      <label>Paste keys (one per line)</label>
+      <textarea id="keyInput" rows="2" placeholder="tvly-xxxxxxxxxxxxx"></textarea>
+    </div>
+    <div>
+      <label>Label (optional, one per line)</label>
+      <textarea id="labelInput" rows="2" placeholder="key1-label&#10;key2-label"></textarea>
+    </div>
+    <button class="btn btn-primary" onclick="addKeys()">Add Keys</button>
+  </div>
+</div>
+
+<main class="waterfall">
+  <div class="column">
+    <div class="column-header">
+      <span>API Keys</span>
+      <div class="col-header-right">
+        <span class="status" id="keyStatus"></span>
+        <button class="btn btn-sm btn-primary" onclick="runHealth()">Health Check</button>
+      </div>
+    </div>
+    <div class="column-body">
+      <table>
+        <thead>
+          <tr><th>Key</th><th>Label</th><th>Status</th><th>Requests</th><th>Errors</th><th>Credits</th><th>Usage %</th><th>Last Used</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="keyTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="column">
+    <div class="column-header">Recent Request Logs</div>
+    <div class="column-body">
+      <table>
+        <thead>
+          <tr><th>Time</th><th>Key</th><th>Endpoint</th><th>Status</th><th>Credits</th><th>Latency</th><th>Error</th></tr>
+        </thead>
+        <tbody id="logTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script>
+const BASE = '';
+function fmtTs(ts) {
+  if (!ts || ts===0) return '-';
+  const d = new Date(ts*1000);
+  return d.toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+function fmtLat(x) {
+  if (x===0) return '0ms';
+  if (x<1000) return x.toFixed(0)+'ms';
+  return (x/1000).toFixed(1)+'s';
+}
+
+function toggleAdd() {
+  const toggle = document.getElementById('addToggle');
+  const body = document.getElementById('addBody');
+  toggle.classList.toggle('open');
+  body.classList.toggle('open');
+}
+
+async function load() {
+  try {
+    const r = await fetch(BASE+'/api/stats');
+    const d = await r.json();
+    document.getElementById('totalKeys').textContent = d.total_keys;
+    document.getElementById('activeKeys').textContent = d.active_keys;
+    document.getElementById('totalReqs').textContent = d.total_requests;
+    document.getElementById('totalCredits').textContent = d.total_credits;
+    document.getElementById('refreshTime').innerHTML = 'Refreshed <strong>' + new Date().toLocaleTimeString('zh-CN') + '</strong>';
+
+    const keyTbody = document.getElementById('keyTableBody');
+    keyTbody.innerHTML = '';
+    for (const k of d.keys) {
+      const pct = k.usage_pct || 0;
+      const c = pct > 80 ? '#ef4444' : pct > 50 ? '#f59e0b' : '#22c55e';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="font-family:monospace;font-size:11px">${escapeHtml(k.masked)}</td>
+        <td>${escapeHtml(k.label||'-')}</td>
+        <td><span class="badge ${k.is_active?'badge-active':'badge-inactive'}">${k.is_active?'Active':'Off'}</span></td>
+        <td>${k.request_count}</td>
+        <td>${k.error_count}</td>
+        <td>${k.credits_used}</td>
+        <td>
+          <div class="progress-bar"><div class="progress-fill" style="width:${Math.min(pct,100)}%;background:${c}"></div></div>
+          <span style="font-size:10px">${pct.toFixed(1)}%</span>
+        </td>
+        <td style="font-size:10px">${fmtTs(k.last_used_at)}</td>
+        <td>
+          <div class="actions">
+            <button class="btn btn-sm ${k.is_active?'btn-danger':'btn-primary'}" onclick="toggleKey('${escapeHtml(k.masked)}',${k.is_active})">${k.is_active?'Deactivate':'Activate'}</button>
+            <button class="btn btn-sm btn-danger" onclick="removeKey('${escapeHtml(k.masked)}')">Remove</button>
+          </div>
+        </td>`;
+      keyTbody.appendChild(tr);
+    }
+
+    const logTbody = document.getElementById('logTableBody');
+    logTbody.innerHTML = '';
+    for (const l of d.logs||[]) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="font-size:10px">${fmtTs(l.created_at)}</td>
+        <td style="font-family:monospace;font-size:11px">${escapeHtml(l.key_masked)}</td>
+        <td>${escapeHtml(l.endpoint)}</td>
+        <td><span class="badge ${l.success?'badge-success':'badge-fail'}">${l.success?'OK':'FAIL'}</span></td>
+        <td>${l.credits_consumed}</td>
+        <td>${fmtLat(l.latency_ms)}</td>
+        <td style="font-size:10px;color:#fca5a5;max-width:180px;overflow:hidden;text-overflow:ellipsis">${escapeHtml((l.error_msg||'').substring(0,80))}</td>`;
+      logTbody.appendChild(tr);
+    }
+  } catch(e) { console.error(e); }
+}
+
+async function addKeys() {
+  const raw = document.getElementById('keyInput').value.trim();
+  const labelsRaw = document.getElementById('labelInput').value.trim();
+  if (!raw) return alert('Please enter API keys');
+  const keys = raw.split('\n').map(s=>s.trim()).filter(Boolean);
+  const labels = labelsRaw.split('\n').map(s=>s.trim()).filter(Boolean);
+  const r = await fetch(BASE+'/api/keys/add', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({keys,labels})
+  });
+  const d = await r.json();
+  alert(`Added ${d.added} keys.`);
+  document.getElementById('keyInput').value = '';
+  document.getElementById('labelInput').value = '';
+  load();
+}
+async function removeKey(masked) {
+  if (!confirm(`Remove ${masked}?`)) return;
+  await fetch(BASE+'/api/keys/remove', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({masked})
+  });
+  load();
+}
+async function toggleKey(masked, isActive) {
+  const ep = isActive ? '/api/keys/deactivate' : '/api/keys/activate';
+  await fetch(BASE+ep, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({masked})
+  });
+  load();
+}
+function escapeHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+async function runHealth() {
+  document.getElementById('keyStatus').textContent = 'Checking...';
+  const r = await fetch(BASE+'/api/health', {method:'POST'});
+  const d = await r.json();
+  const msgs = d.results.map(x => `${x.masked}: ${x.alive?'ALIVE':'DEAD'}${x.latency_ms ? ' ('+x.latency_ms+'ms)' : ''}${x.error ? ' ['+x.error+']' : ''}`);
+  document.getElementById('keyStatus').textContent = msgs.join(' | ');
+  load();
+}
+load();
+setInterval(load, 10000);
+</script>
+</body>
+</html>
