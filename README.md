@@ -1,5 +1,21 @@
 # Tavily MCP Key Pool
 
+> 简体中文版 README: [README.zh.md](README.zh.md)
+
+**Why?** If you have multiple Tavily API keys (multiple accounts, a team
+budget, batch-purchased credits, …) and use them through an AI coding
+agent, you'll hit three problems fast:
+
+1. **Single-key bottlenecks** — one key's rate limit throttles everything.
+2. **Silent failures** — a key expires, hits a quota, or gets revoked, and
+   your searches just... stop working.
+3. **No visibility** — you don't know which keys are being used or how much.
+
+This project solves all three: a tiny MCP server that round-robins across
+your key pool, auto-deactivates dead keys, and exposes usage stats — so you
+can drop it into Claude Desktop, Cursor, DeepSeek Harness, or any MCP
+client without changing your workflow.
+
 A Tavily MCP server with a SQLite-backed **round-robin API key pool**,
 built-in usage tracking, automatic health-based failover, and a standalone
 FastAPI dashboard. Standard MCP protocol — works with any MCP-compatible
